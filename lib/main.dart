@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
-void main() {
+Future main() async {
+  await dotenv.load(fileName: '.env');
   runApp(const MyApp());
 }
 
@@ -29,16 +31,15 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   List items = [];
-  final TextEditingController _todoController = TextEditingController();
+  final TextEditingController _searchBooksController = TextEditingController();
 
   Future<void> getData(String keyword) async {
-    // 現状はAPIキーをハードコーディングしている
     var response =
         await http.get(Uri.https('www.googleapis.com', '/books/v1/volumes', {
       'q': '{${keyword}}',
       'maxResults': '40',
       'langRestrict': 'ja',
-      'key': 'AIzaSyBlWk_MJ73tQYkJMlDK8rixl9AgebBl3O0'
+      'key': dotenv.get('GOOGLE_BOOKS_API_KEY')
     }));
 
     var jsonResponse = jsonDecode(response.body);
@@ -46,13 +47,6 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       items = jsonResponse['items'];
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    getData("TypeScript");
   }
 
   @override
@@ -64,7 +58,7 @@ class _MyHomePageState extends State<MyHomePage> {
         body: Column(
           children: [
             TextField(
-              controller: _todoController,
+              controller: _searchBooksController,
               decoration: const InputDecoration(
                 hintText: '本を検索...',
                 contentPadding: EdgeInsets.all(20),
@@ -72,32 +66,47 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ElevatedButton(
               onPressed: () {
-                print("pressed");
+                String query = _searchBooksController.text;
+                if (query == "") {
+                  showDialog(
+                      context: context,
+                      builder: (BuildContext context) => const AlertDialog(
+                            title: Text("文字を入力してください！"),
+                            content: Text("アラート"),
+                          ));
+                  return;
+                }
+                getData(query);
               },
               child: Container(
                   alignment: Alignment.center, child: const Text('検索')),
             ),
             Expanded(
-              child: ListView.builder(
-                itemCount: items.length,
-                itemBuilder: (BuildContext context, int index) {
-                  return Card(
-                    child: Column(
-                      children: <Widget>[
-                        ListTile(
-                          leading: Image.network(
-                            items[index]['volumeInfo']['imageLinks']
-                                ['thumbnail'],
+              child: items.length == 0
+                  ? const Center(
+                      child: Text('検索してみましょう'),
+                    )
+                  : ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        return Card(
+                          child: Column(
+                            children: <Widget>[
+                              ListTile(
+                                leading: Image.network(
+                                  items[index]['volumeInfo']['imageLinks']
+                                      ['thumbnail'],
+                                ),
+                                title:
+                                    Text(items[index]['volumeInfo']['title']),
+                                subtitle: Text(items[index]['volumeInfo']
+                                    ['publishedDate']),
+                              ),
+                            ],
                           ),
-                          title: Text(items[index]['volumeInfo']['title']),
-                          subtitle:
-                              Text(items[index]['volumeInfo']['publishedDate']),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             )
           ],
         ));
